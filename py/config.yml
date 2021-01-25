@@ -1,0 +1,8 @@
+octoprint_exec: /opt/venvs/octoprint/bin/octoprint
+profiles:
+    printer1:
+        port: 5001
+        basedir: /opt/octoprint_storage/printer1
+    printer2:
+        port: 5002
+        basedir: /opt/octoprint_storage/pritner2/
