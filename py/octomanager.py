@@ -9,6 +9,7 @@
 """
 
 """
+import sys
 import os
 import click
 import yaml
@@ -17,9 +18,11 @@ from time import sleep
 __author__ = "Stefano Stella"
 
 _default_octoprint_exec = "octoprint"
+_default_additional_options = ""
 _default_start_timeout = 10
 _default_stop_timeout = 10
 _default_pid_path = "/tmp"
+_vars_to_check = ["octoprint_exec", "additional_options"]
 
 
 def wait_command_timeout(timeout, pid_file, wanted_status):
@@ -41,7 +44,7 @@ def check_pidfile(pid_file):
             return False
     except IOError as e:
         return False
-    except Exception:
+    except Exception:  # handle other exceptions such as attribute errors
         return False
     if pid_running(int(pid)):
         return True
@@ -68,11 +71,15 @@ def get_profile(ctx):
         click.echo(f"[ERROR] Profile {profile_name} not found in {config_file}")
         sys.exit(1)
     click.echo(f"[DEBUG] Loaded profile for {profile_name}: {config['profiles'][profile_name]}")
+    for var in _vars_to_check:
+        if var in config['profiles'][profile_name]:
+            ctx.obj[var] = config['profiles'][profile_name][var]
     return config['profiles'][profile_name]
 
 
 def render_cmd(ctx, command):
-    cmd = f"{ctx.obj['octoprint_exec']} daemon"
+    additional_options = ' '.join(ctx.obj['additional_options'])
+    cmd = f"{ctx.obj['octoprint_exec']} daemon {additional_options}"
     args = ['host', 'port', 'config', 'basedir', 'logging']
     opts = ['verbose', 'safe', 'ignore-blacklist', 'debug',
             'iknowwhatimdoing', 'ipv6', 'ipv4']
@@ -109,11 +116,13 @@ def main(ctx, config):
     click.echo(f"[INFO] Loading config file '{config.name}'")
     ctx.obj['config'] = yaml.load(config.read(), Loader=yaml.FullLoader)
     ctx.obj['octoprint_exec'] = ctx.obj['config'].get('octoprint_exec',
-            _default_octoprint_exec)
+                                                      _default_octoprint_exec)
+    ctx.obj['additional_options'] = ctx.obj['config'].get('additional_options',
+                                                       _default_additional_options)
     ctx.obj['start_timeout'] = ctx.obj['config'].get('start_timeout',
-            _default_start_timeout)
+                                                     _default_start_timeout)
     ctx.obj['stop_timeout'] = ctx.obj['config'].get('stop_timeout',
-            _default_stop_timeout)
+                                                    _default_stop_timeout)
     if 'profiles' not in ctx.obj['config']:
         click.echo(f"[ERROR] No profile found in the config file '{config.name}'")
         ctx.exit(1)
@@ -134,6 +143,8 @@ def start(ctx, profile_name):
     if check_pidfile(ctx.obj['pid_file']):
         click.echo(f"[WARNING] Octoprint for '{profile_name}' is already running")
         ctx.exit(0)
+    click.echo("[DEBUG] Who am I:")
+    os.system('whoami')
     os.system(render_cmd(ctx, 'start'))
     sleep(2)
     if wait_command_timeout(ctx.obj['start_timeout'], ctx.obj['pid_file'], True):
